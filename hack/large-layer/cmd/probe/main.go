@@ -28,6 +28,8 @@ func main() {
 	name := flag.String("method", "kp-zstd", "registered method name")
 	levelName := flag.String("level", "default", "fast|default|best")
 	bufSize := flag.Int("buf", 1<<20, "copy buffer size")
+	op := flag.String("op", "compress", "compress|decompress")
+	out := flag.String("out", "", "compress: also write the artifact here, for a later -op decompress")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: probe [-method m] [-level l] <layer.tar>")
@@ -62,19 +64,52 @@ func main() {
 		os.Exit(1)
 	}
 
+	// One measured operation per process, so the rusage figures below belong to
+	// it alone. Decompress reads an artifact a previous -op compress produced.
 	counter := &countWriter{}
+	var dst io.Writer = counter
+	if *op == "compress" && *out != "" {
+		f, err := os.Create(*out)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		dst = io.MultiWriter(counter, f)
+	}
+
 	start := time.Now()
-	if err := method.Compress(m, counter, src, level, *bufSize); err != nil {
+	switch *op {
+	case "compress":
+		err = method.Compress(m, dst, src, level, *bufSize)
+	case "decompress":
+		err = method.Decompress(m, dst, src, *bufSize)
+	default:
+		err = fmt.Errorf("unknown op %q", *op)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	wall := time.Since(start)
 
 	cpu, rss := usage()
-	mib := float64(fi.Size()) / (1 << 20)
-	fmt.Printf("%-14s %-8s %8.2fs wall %9.2fs cpu %6.2fx cores %9.1f MiB rss %8.0f MB/s %7.3f ratio\n",
-		*name, *levelName, wall.Seconds(), cpu, cpu/wall.Seconds(), rss,
-		mib/wall.Seconds(), float64(fi.Size())/float64(counter.n))
+	// Throughput is always over the uncompressed side, so compress and
+	// decompress rows for the same method are directly comparable.
+	var uncompressed int64
+	ratio := 0.0
+	switch *op {
+	case "compress":
+		uncompressed = fi.Size()
+		ratio = float64(fi.Size()) / float64(counter.count())
+	case "decompress":
+		uncompressed = counter.count()
+		ratio = float64(counter.count()) / float64(fi.Size())
+	}
+	mib := float64(uncompressed) / (1 << 20)
+	fmt.Printf("%-14s %-11s %-8s %8.2fs wall %9.2fs cpu %6.2fx cores %9.1f MiB rss %8.0f MB/s %7.3f ratio\n",
+		*name, *op, *levelName, wall.Seconds(), cpu, cpu/wall.Seconds(), rss,
+		mib/wall.Seconds(), ratio)
 }
 
 // usage sums this process and any children it waited for, so in-process (Go,
@@ -102,6 +137,7 @@ func usage() (cpuSeconds, peakRSSMiB float64) {
 type countWriter struct{ n int64 }
 
 func (c *countWriter) Write(p []byte) (int, error) { c.n += int64(len(p)); return len(p), nil }
+func (c *countWriter) count() int64                { return c.n }
 
 var _ io.Writer = (*countWriter)(nil)
 
