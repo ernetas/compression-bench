@@ -1,0 +1,41 @@
+# Large-layer configuration -- see build.sh for how to produce the image.
+#
+# The corpus is one ~13.7GiB image whose dominant layer holds ~92% of the bytes.
+# That is the case the default alpine/golang corpus cannot show: compbench times
+# the makespan of a whole image, so with one dominant layer the jobConcurrency
+# axis is capped at total/largest (~1.08x here) for any codec that is serial
+# within a stream. Only a codec that parallelises INSIDE the layer gains.
+#
+# Methods are ordered fastest-and-most-interesting first: the single-core gzip
+# baselines move ~14GiB per pass at ~150MB/s and dominate the wall clock, so they
+# run last.
+#
+# The matrix is trimmed (one level, one buffer size, one iteration) for the same
+# reason. Raise `iterations` if you want stddev on a machine you can leave alone.
+images:
+  - localhost:5000/node-modules-monorepo:11g
+
+methods:
+  # parallel-within-a-stream
+  - external: { name: zstd-cli-mt, cmd: [zstd, "-{level}", -T0, -c], decmd: [zstd, -d, -c],
+                rawLevels: { fast: "1", default: "3", best: "19" } }
+  - kp-pgzip
+  - external: { name: pigz,        cmd: [pigz, "-{level}", -c],      decmd: [pigz, -d, -c] }
+  # serial-within-a-stream
+  - kp-zstd
+  - zstd-cgo               # skipped unless built with `-tags cgo_zstd` (CGO_ENABLED=1)
+  - external: { name: zstd-cli,    cmd: [zstd, "-{level}", -c],      decmd: [zstd, -d, -c],
+                rawLevels: { fast: "1", default: "3", best: "19" } }
+  - kp-pgzip-seq
+  - kp-gzip
+  - stdlib-gzip
+
+levels: [default]
+ops: [compress, decompress]
+bufferSizes: [1MiB]
+jobConcurrency: [1, 4]
+iterations: 1
+gap: 500ms
+
+corpus: .corpus
+results: results-large

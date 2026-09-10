@@ -127,7 +127,13 @@ func (kpPgzipSeq) NewWriter(w io.Writer, level Level) (io.WriteCloser, error) {
 	return gw, nil
 }
 
+// NewReader deliberately uses the default reader rather than
+// NewReaderN(pgzipBlockSize, 1). pgzip's reader `blocks` is readahead depth, not
+// compression concurrency -- inflate is serial either way -- so it is not part
+// of what this method varies, and holding the reader to a single pooled buffer
+// fails the round-trip gate on multi-GB layers with "gzip: invalid checksum".
+// Using the default also keeps the decompress rows comparable with kp-pgzip.
 func (kpPgzipSeq) NewReader(r io.Reader) (io.ReadCloser, error) {
-	gr, err := pgzip.NewReaderN(r, pgzipBlockSize, 1)
+	gr, err := pgzip.NewReader(r)
 	return gr, errors.WithStack(err)
 }
