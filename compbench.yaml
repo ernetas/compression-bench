@@ -11,12 +11,13 @@ methods:
   - kp-zstd
   - zstd-cgo               # skipped unless built with `-tags cgo_zstd` (CGO_ENABLED=1)
   - external: { name: pigz,     cmd: [pigz, "-{level}", -c], decmd: [pigz, -d, -c] }
-  # The zstd CLI defaults to nbWorkers=0 (single-threaded), so `zstd-cli` measures
-  # one core — same as kp-zstd and zstd-cgo, neither of which can enable libzstd's
-  # multithreading. `zstd-cli-mt` adds -T0 (one worker per core) and is the only
-  # entry in the matrix that compresses a single stream on more than one core
-  # besides pgzip. -T is a compress-side option; decmd is left alone.
-  - external: { name: zstd-cli,    cmd: [zstd, "-{level}", -c],      decmd: [zstd, -d, -c],
+  # Both entries pin -T explicitly. The zstd CLI has been multi-threaded by
+  # DEFAULT since 1.5.x (measured: plain `zstd -3` runs ~4x cores), so a bare
+  # `zstd -{level}` is not a single-core baseline and silently makes libzstd look
+  # several times faster than kp-zstd and zstd-cgo, which are single-threaded and
+  # cannot be told otherwise. -T1 and -T0 make the two rows mean what they say.
+  # -T is a compress-side option; decmd is left alone.
+  - external: { name: zstd-cli,    cmd: [zstd, "-{level}", -T1, -c], decmd: [zstd, -d, -c],
                 rawLevels: { fast: "1", default: "3", best: "19" } }
   - external: { name: zstd-cli-mt, cmd: [zstd, "-{level}", -T0, -c], decmd: [zstd, -d, -c],
                 rawLevels: { fast: "1", default: "3", best: "19" } }
