@@ -17,7 +17,7 @@ repo="$(cd "${here}/../.." && pwd)"
 echo "layer: ${layer} ($(du -h "${layer}" | cut -f1)), level=${level}, $(nproc) hardware threads"
 echo
 
-for m in stdlib-gzip kp-gzip kp-pgzip kp-pgzip-seq kp-zstd zstd-cgo pigz zstd-cli zstd-cli-mt; do
+for m in stdlib-gzip kp-gzip kp-pgzip kp-pgzip-b1 kp-zstd zstd-cgo pigz zstd-cli zstd-cli-mt; do
   ( cd "${repo}" && go run -tags cgo_zstd ./hack/large-layer/cmd/probe \
       -method "${m}" -level "${level}" "${layer}" ) || echo "${m}: skipped"
 done

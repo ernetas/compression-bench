@@ -37,7 +37,7 @@ crafted manifest/artifact can't traverse outside. Nothing runs as root.
 | `stdlib-gzip` | `compress/gzip`                   |
 | `kp-gzip`     | `klauspost/compress/gzip`         |
 | `kp-pgzip`    | `klauspost/pgzip` (parallel: 1MiB blocks × GOMAXPROCS) |
-| `kp-pgzip-seq`| `klauspost/pgzip` with one block in flight — byte-identical output, one core |
+| `kp-pgzip-b1`| `klauspost/pgzip` with one block in flight — byte-identical output, one core |
 | `kp-zstd`     | `klauspost/compress/zstd` (pure Go) |
 | `zstd-cgo`    | cgo libzstd binding — only with `-tags cgo_zstd` |
 | `external`    | any CLI via stdin/stdout (e.g. `pigz`, `zstd`) |

@@ -105,14 +105,14 @@ func TestExternalMissingBinary(t *testing.T) {
 // sanity: a ReadCloser returned by NewReader is usable as io.Reader.
 var _ io.Reader = io.ReadCloser(nil)
 
-// TestPgzipVariantsAgree pins the property that makes kp-pgzip-seq useful: pgzip's
+// TestPgzipVariantsAgree pins the property that makes kp-pgzip-b1 useful: pgzip's
 // output depends on the block size alone, not the worker count, so holding it to
 // one block in flight must not change a single byte. If this ever fails, the two
 // rows in the report stop being a clean parallelism-only comparison.
 func TestPgzipVariantsAgree(t *testing.T) {
 	par, ok := Get("kp-pgzip")
 	require.True(t, ok)
-	seq, ok := Get("kp-pgzip-seq")
+	seq, ok := Get("kp-pgzip-b1")
 	require.True(t, ok)
 
 	data := testData(4 << 20) // several 1MiB blocks, so boundaries are exercised

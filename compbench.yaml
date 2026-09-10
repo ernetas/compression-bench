@@ -7,7 +7,7 @@ methods:
   - stdlib-gzip
   - kp-gzip
   - kp-pgzip
-  - kp-pgzip-seq          # pgzip held to one block in flight; same bytes, one core
+  - kp-pgzip-b1          # pgzip with one block in flight; same bytes, ~2 cores
   - kp-zstd
   - zstd-cgo               # skipped unless built with `-tags cgo_zstd` (CGO_ENABLED=1)
   - external: { name: pigz,     cmd: [pigz, "-{level}", -c], decmd: [pigz, -d, -c] }

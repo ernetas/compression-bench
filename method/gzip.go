@@ -43,7 +43,7 @@ func init() {
 	Register(stdlibGzip{})
 	Register(kpGzip{})
 	Register(kpPgzip{})
-	Register(kpPgzipSeq{})
+	Register(kpPgzipB1{})
 }
 
 // stdlibGzip is compress/gzip, the single-threaded baseline.
@@ -101,19 +101,23 @@ func (kpPgzip) NewReader(r io.Reader) (io.ReadCloser, error) {
 	return gr, errors.WithStack(err)
 }
 
-// kpPgzipSeq is klauspost/pgzip held to one block in flight: the same
-// block-parallel gzip format, compressed serially. It is the pgzip analogue of
-// `zstd -T1`, and it splits pgzip's two effects apart — output is byte-identical
-// to kp-pgzip (so the block-boundary ratio cost shows up here too), while
-// throughput and in-flight memory are those of a single worker.
-type kpPgzipSeq struct{}
+// kpPgzipB1 is klauspost/pgzip with a single block in flight -- SetConcurrency's
+// `blocks` set to 1, against a default of GOMAXPROCS. It is not sequential: pgzip
+// always compresses on its own goroutine, so this measures ~2 cores, not 1.
+//
+// Its purpose is the memory knob, not the throughput. Output is byte-identical
+// to kp-pgzip (the bytes are a function of block size alone), so the pair
+// isolates what in-flight block count actually buys. Measured on a 13GB layer at
+// level 6: 100.2 MiB peak RSS at 1639 MB/s (14.1x cores) against 33.8 MiB at
+// 311 MB/s (2.0x cores) here.
+type kpPgzipB1 struct{}
 
-func (kpPgzipSeq) Name() string            { return "kp-pgzip-seq" }
-func (kpPgzipSeq) Version() string         { return modVersion("github.com/klauspost/pgzip") }
-func (kpPgzipSeq) RawLevel(l Level) string { return gzipRawLevel(l) }
-func (kpPgzipSeq) GoMemory() bool          { return true }
+func (kpPgzipB1) Name() string            { return "kp-pgzip-b1" }
+func (kpPgzipB1) Version() string         { return modVersion("github.com/klauspost/pgzip") }
+func (kpPgzipB1) RawLevel(l Level) string { return gzipRawLevel(l) }
+func (kpPgzipB1) GoMemory() bool          { return true }
 
-func (kpPgzipSeq) NewWriter(w io.Writer, level Level) (io.WriteCloser, error) {
+func (kpPgzipB1) NewWriter(w io.Writer, level Level) (io.WriteCloser, error) {
 	gw, err := pgzip.NewWriterLevel(w, gzipNativeLevel(level))
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -133,7 +137,7 @@ func (kpPgzipSeq) NewWriter(w io.Writer, level Level) (io.WriteCloser, error) {
 // of what this method varies, and holding the reader to a single pooled buffer
 // fails the round-trip gate on multi-GB layers with "gzip: invalid checksum".
 // Using the default also keeps the decompress rows comparable with kp-pgzip.
-func (kpPgzipSeq) NewReader(r io.Reader) (io.ReadCloser, error) {
+func (kpPgzipB1) NewReader(r io.Reader) (io.ReadCloser, error) {
 	gr, err := pgzip.NewReader(r)
 	return gr, errors.WithStack(err)
 }

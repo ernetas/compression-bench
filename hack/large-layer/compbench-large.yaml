@@ -26,7 +26,7 @@ methods:
   - zstd-cgo               # skipped unless built with `-tags cgo_zstd` (CGO_ENABLED=1)
   - external: { name: zstd-cli,    cmd: [zstd, "-{level}", -T1, -c], decmd: [zstd, -d, -c],
                 rawLevels: { fast: "1", default: "3", best: "19" } }
-  - kp-pgzip-seq
+  - kp-pgzip-b1
   - kp-gzip
   - stdlib-gzip
 
