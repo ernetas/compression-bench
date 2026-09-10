@@ -145,14 +145,16 @@ var _ io.Writer = (*countWriter)(nil)
 var zstdCLILevels = map[method.Level]string{method.Fast: "1", method.Default: "3", method.Best: "19"}
 
 // externals mirrors the external entries of hack/large-layer/compbench-large.yaml.
-// zstd-cli pins -T1: the zstd CLI has been multi-threaded by default since 1.5.x,
-// so without it the "single-threaded zstd" row silently measures several cores.
+// Each row pins its thread mode: the CLI is MT by default since 1.5.x, and -T1 is
+// still the MT path with one worker -- only --single-thread avoids it, at a
+// different output digest.
 var externals = map[string]struct {
 	cmd, decmd []string
 	levels     map[method.Level]string
 }{
 	"pigz":        {[]string{"pigz", "-{level}", "-c"}, []string{"pigz", "-d", "-c"}, nil},
 	"pigz-p1":     {[]string{"pigz", "-{level}", "-p", "1", "-c"}, []string{"pigz", "-d", "-c"}, nil},
+	"zstd-cli-st": {[]string{"zstd", "-{level}", "--single-thread", "-c"}, []string{"zstd", "-d", "-c"}, zstdCLILevels},
 	"zstd-cli":    {[]string{"zstd", "-{level}", "-T1", "-c"}, []string{"zstd", "-d", "-c"}, zstdCLILevels},
 	"zstd-cli-mt": {[]string{"zstd", "-{level}", "-T0", "-c"}, []string{"zstd", "-d", "-c"}, zstdCLILevels},
 }
