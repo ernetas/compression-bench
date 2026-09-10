@@ -10,6 +10,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+// pgzipBlockSize is klauspost/pgzip's own default block size. The compressed
+// bytes are a function of this alone — not of the worker count — so every pgzip
+// variant that keeps it produces byte-identical output.
+const pgzipBlockSize = 1 << 20
+
 // gzipLevel maps the normalized level onto the gzip 1..9 scale, shared by every
 // gzip-family method (stdlib, klauspost, pgzip).
 func gzipRawLevel(l Level) string {
@@ -38,6 +43,7 @@ func init() {
 	Register(stdlibGzip{})
 	Register(kpGzip{})
 	Register(kpPgzip{})
+	Register(kpPgzipSeq{})
 }
 
 // stdlibGzip is compress/gzip, the single-threaded baseline.
@@ -92,5 +98,36 @@ func (kpPgzip) NewWriter(w io.Writer, level Level) (io.WriteCloser, error) {
 
 func (kpPgzip) NewReader(r io.Reader) (io.ReadCloser, error) {
 	gr, err := pgzip.NewReader(r)
+	return gr, errors.WithStack(err)
+}
+
+// kpPgzipSeq is klauspost/pgzip held to one block in flight: the same
+// block-parallel gzip format, compressed serially. It is the pgzip analogue of
+// `zstd -T1`, and it splits pgzip's two effects apart — output is byte-identical
+// to kp-pgzip (so the block-boundary ratio cost shows up here too), while
+// throughput and in-flight memory are those of a single worker.
+type kpPgzipSeq struct{}
+
+func (kpPgzipSeq) Name() string            { return "kp-pgzip-seq" }
+func (kpPgzipSeq) Version() string         { return modVersion("github.com/klauspost/pgzip") }
+func (kpPgzipSeq) RawLevel(l Level) string { return gzipRawLevel(l) }
+func (kpPgzipSeq) GoMemory() bool          { return true }
+
+func (kpPgzipSeq) NewWriter(w io.Writer, level Level) (io.WriteCloser, error) {
+	gw, err := pgzip.NewWriterLevel(w, gzipNativeLevel(level))
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	// Default block size, one block in flight. pgzip's default is
+	// SetConcurrency(pgzipBlockSize, GOMAXPROCS).
+	if err := gw.SetConcurrency(pgzipBlockSize, 1); err != nil {
+		gw.Close()
+		return nil, errors.WithStack(err)
+	}
+	return gw, nil
+}
+
+func (kpPgzipSeq) NewReader(r io.Reader) (io.ReadCloser, error) {
+	gr, err := pgzip.NewReaderN(r, pgzipBlockSize, 1)
 	return gr, errors.WithStack(err)
 }

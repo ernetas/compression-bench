@@ -36,10 +36,18 @@ crafted manifest/artifact can't traverse outside. Nothing runs as root.
 |---------------|-----------------------------------|
 | `stdlib-gzip` | `compress/gzip`                   |
 | `kp-gzip`     | `klauspost/compress/gzip`         |
-| `kp-pgzip`    | `klauspost/pgzip` (parallel)      |
+| `kp-pgzip`    | `klauspost/pgzip` (parallel: 1MiB blocks × GOMAXPROCS) |
+| `kp-pgzip-seq`| `klauspost/pgzip` with one block in flight — byte-identical output, one core |
 | `kp-zstd`     | `klauspost/compress/zstd` (pure Go) |
 | `zstd-cgo`    | cgo libzstd binding — only with `-tags cgo_zstd` |
 | `external`    | any CLI via stdin/stdout (e.g. `pigz`, `zstd`) |
+
+Only `kp-pgzip` and an external `zstd -T0` compress a **single stream** on more
+than one core. `kp-zstd`'s streaming encoder is a pipeline, not a fan-out (one
+goroutine per block behind a `wg.Wait`), the `zstd` CLI defaults to
+`nbWorkers=0`, and `DataDog/zstd` exposes no way to set it — so those three
+measure one core each. Compare like for like before reading anything into the
+gzip-vs-zstd gap.
 
 ## Build
 
