@@ -21,9 +21,10 @@ methods:
                 rawLevels: { fast: "1", default: "3", best: "19" } }
   - kp-pgzip
   - external: { name: pigz,        cmd: [pigz, "-{level}", -c],      decmd: [pigz, -d, -c] }
-  # serial-within-a-stream (zstd-cli pins -T1: the CLI is MT by default since 1.5.x)
+  # serial-within-a-stream (zstd-cli pins -T1: the CLI is MT by default since v1.5.7)
   - kp-zstd
   - zstd-cgo               # skipped unless built with `-tags cgo_zstd` (CGO_ENABLED=1)
+  - zstd-cgo-mt            # same binding with ZSTD_c_nbWorkers set; same build tag
   - external: { name: zstd-cli-st, cmd: [zstd, "-{level}", --single-thread, -c], decmd: [zstd, -d, -c],
                 rawLevels: { fast: "1", default: "3", best: "19" } }
   - external: { name: zstd-cli,    cmd: [zstd, "-{level}", -T1, -c], decmd: [zstd, -d, -c],

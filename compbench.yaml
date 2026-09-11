@@ -10,10 +10,12 @@ methods:
   - kp-pgzip-b1          # pgzip with one block in flight; same bytes, ~2 cores
   - kp-zstd
   - zstd-cgo               # skipped unless built with `-tags cgo_zstd` (CGO_ENABLED=1)
+  - zstd-cgo-mt            # same binding with ZSTD_c_nbWorkers set; same build tag
   - external: { name: pigz,     cmd: [pigz, "-{level}", -c], decmd: [pigz, -d, -c] }
   # All three pin their thread mode explicitly, because none of the defaults mean
   # what they look like. The zstd CLI has been multi-threaded by DEFAULT since
-  # 1.5.x (measured: plain `zstd -3` runs ~4x cores), so a bare `zstd -{level}`
+  # v1.5.7, capped at max(1, min(4, nbCores/4)) (measured: plain `zstd -3` runs
+  # ~4x cores on a 16-thread box; on <= 1.5.6 it was single-threaded), so a bare `zstd -{level}`
   # is not a single-core baseline. And -T1 is not single-threaded either: it
   # takes the MT path with one worker, which costs a full round buffer
   # (measured 54.2 MiB against --single-thread's 15.6 MiB) and, more to the

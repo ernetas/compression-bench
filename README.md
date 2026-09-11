@@ -40,17 +40,27 @@ crafted manifest/artifact can't traverse outside. Nothing runs as root.
 | `kp-pgzip-b1`| `klauspost/pgzip` with one block in flight — byte-identical output, one core |
 | `kp-zstd`     | `klauspost/compress/zstd` (pure Go) |
 | `zstd-cgo`    | cgo libzstd binding — only with `-tags cgo_zstd` |
+| `zstd-cgo-mt` | same binding with `ZSTD_c_nbWorkers` set — only with `-tags cgo_zstd` |
 | `external`    | any CLI via stdin/stdout (e.g. `pigz`, `zstd`) |
 
 Thread counts are not comparable across these by default, so the config pins
 them. `kp-pgzip` splits into fixed 1MiB blocks across `GOMAXPROCS` workers.
-`kp-zstd`'s streaming encoder is a pipeline, not a fan-out (one goroutine per
-block behind a `wg.Wait`), and `DataDog/zstd` exposes no way to set
-`ZSTD_c_nbWorkers` -- so both of those compress a single stream on roughly one
-core and cannot be told otherwise. The `zstd` CLI is the opposite: it has been
-multi-threaded **by default** since 1.5.x, so `zstd-cli` pins `-T1` and
-`zstd-cli-mt` pins `-T0` rather than relying on the default. Compare like for
-like before reading anything into the gzip-vs-zstd gap.
+`kp-zstd`'s streaming encoder is a pipeline rather than a fan-out (one goroutine
+per block behind a `wg.Wait`), so it sits near 1.7 cores and no option changes
+that. `zstd-cgo` *can* be told to use more: `DataDog/zstd` exposes
+`SetNbWorkers`, which the plain row deliberately does not call, so it is a
+one-worker baseline by omission rather than by constraint -- `zstd-cgo-mt` is the
+same binding with `ZSTD_c_nbWorkers` set. Note that value cannot be 0: at the
+library level `nbWorkers=0` means *no* worker threads, since the core detection
+behind the CLI's `-T0` lives in the CLI, not in libzstd.
+
+The `zstd` CLI is the opposite problem: it became multi-threaded **by default**
+in v1.5.7 (facebook/zstd#4211), capped at `max(1, min(4, nbCores/4))`. So
+`zstd-cli` pins `-T1`, `zstd-cli-st` pins `--single-thread` and `zstd-cli-mt`
+pins `-T0`, rather than relying on a default that changed under us. On zstd
+<= 1.5.6 a bare `zstd -{level}` *was* single-threaded, so results from older
+CLIs are not directly comparable. Compare like for like before reading anything
+into the gzip-vs-zstd gap.
 
 `hack/large-layer/probe-all.sh` reports cores-used and peak RSS per method, which
 is what actually distinguishes a fast codec from a codec spending eight cores.

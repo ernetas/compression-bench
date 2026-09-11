@@ -24,7 +24,7 @@ echo "layer: ${layer} ($(du -h "${layer}" | cut -f1)), level=${level}, $(nproc) 
 echo
 
 cd "${repo}"
-for m in stdlib-gzip kp-gzip kp-pgzip kp-pgzip-b1 kp-zstd zstd-cgo pigz zstd-cli-st zstd-cli zstd-cli-mt; do
+for m in stdlib-gzip kp-gzip kp-pgzip kp-pgzip-b1 kp-zstd zstd-cgo zstd-cgo-mt pigz zstd-cli-st zstd-cli zstd-cli-mt; do
   art="${artdir}/${m}.bin"
   go run -tags cgo_zstd ./hack/large-layer/cmd/probe \
       -method "${m}" -level "${level}" -op compress -out "${art}" "${layer}" || { echo "${m}: skipped"; continue; }

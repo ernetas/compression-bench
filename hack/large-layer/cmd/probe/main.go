@@ -145,8 +145,8 @@ var _ io.Writer = (*countWriter)(nil)
 var zstdCLILevels = map[method.Level]string{method.Fast: "1", method.Default: "3", method.Best: "19"}
 
 // externals mirrors the external entries of hack/large-layer/compbench-large.yaml.
-// Each row pins its thread mode: the CLI is MT by default since 1.5.x, and -T1 is
-// still the MT path with one worker -- only --single-thread avoids it, at a
+// Each row pins its thread mode: the CLI is MT by default since v1.5.7, and -T1
+// is still the MT path with one worker -- only --single-thread avoids it, at a
 // different output digest.
 var externals = map[string]struct {
 	cmd, decmd []string
