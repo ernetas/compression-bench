@@ -31,7 +31,17 @@ func main() {
 	blocks := flag.Int("blocks", 0, "blocks in flight per writer; 0 = pgzip default (GOMAXPROCS)")
 	budget := flag.Int("budget", 0, "total blocks in flight across all writers; overrides -blocks")
 	level := flag.Int("level", 6, "gzip level")
+	sinkMBps := flag.Float64("sink-mbps", 0, "throttle each writer's output to this rate; 0 = unthrottled")
+	maxLoad := flag.Float64("max-load", 2.0, "refuse to run if the 1-minute load average exceeds this")
+	ignoreLoad := flag.Bool("ignore-load", false, "run even on a busy machine (memory figures stay valid; timings do not)")
 	flag.Parse()
+
+	if !*ignoreLoad {
+		if err := checkLoad(*maxLoad); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: parallel [-writers N] [-blocks B | -budget T] <layer.tar>")
 		os.Exit(2)
@@ -42,6 +52,9 @@ func main() {
 		perWriter = runtime.GOMAXPROCS(0)
 	}
 	label := fmt.Sprintf("blocks=%d/writer", perWriter)
+	if *sinkMBps > 0 {
+		defer func() { fmt.Printf("   (sink throttled to %.0f MB/s per writer)\n", *sinkMBps) }()
+	}
 	if *budget > 0 {
 		perWriter = max(1, *budget / *writers)
 		label = fmt.Sprintf("budget=%d -> %d/writer", *budget, perWriter)
@@ -60,7 +73,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs[i] = compressOnce(flag.Arg(0), *level, perWriter)
+			errs[i] = compressOnce(flag.Arg(0), *level, perWriter, *sinkMBps)
 		}()
 	}
 	wg.Wait()
@@ -85,13 +98,17 @@ func main() {
 		*writers, label, wall.Seconds(), cpu/wall.Seconds(), float64(ru.Maxrss)/div, total/wall.Seconds())
 }
 
-func compressOnce(path string, level, blocks int) error {
+func compressOnce(path string, level, blocks int, sinkMBps float64) error {
 	src, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer src.Close()
-	w, err := pgzip.NewWriterLevel(io.Discard, level)
+	var dst io.Writer = io.Discard
+	if sinkMBps > 0 {
+		dst = newThrottledWriter(dst, sinkMBps)
+	}
+	w, err := pgzip.NewWriterLevel(dst, level)
 	if err != nil {
 		return err
 	}
